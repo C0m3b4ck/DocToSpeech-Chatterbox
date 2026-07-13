@@ -14,7 +14,7 @@ Convert documents (EPUB, PDF, DOCX, HTML, TXT) to speech using local AI text-to-
 | Disk | 5 GB | 20 GB+ (models are large) |
 | OS | Linux, macOS, Windows | Linux (best CUDA support) |
 
-**Note:** CPU-only mode works but is 5-10x slower than GPU. Some models (Tortoise, Sesame CSM) require a GPU.
+**Note:** CPU-only mode works but is 5-10x slower than GPU. Some models (Tortoise, Sesame CSM) require a GPU. Use Python 3.11 for all venvs — Python 3.14 is not supported by torch 2.6.0 (required by Chatterbox).
 
 ## Features
 
@@ -63,16 +63,17 @@ These models all come from `coqui-tts` and run in the same environment.
 
 | Conflict | Models Affected | Reason |
 |----------|----------------|--------|
-| `torch` version | Chatterbox | Pins `torch==2.6.0`, coqui-tts uses `>=2.1` |
+| `torch` version | Chatterbox | Uses torch==2.6.0, coqui-tts may lag behind |
 | `transformers` version | Tortoise | Needs `==4.31`, coqui-tts needs `>=4.43` |
 | `transformers` version | Sesame CSM | Needs `>=4.45`, may conflict with coqui 0.25.x |
+| Python version | All | Use Python 3.11 — torch 2.6.0 has no wheels for Python 3.14 |
 
 ## Installation
 
 ### Base install (4 Coqui models)
 
 ```bash
-python -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-coqui.txt
 ```
@@ -86,8 +87,8 @@ pip install -r requirements-styletts2.txt
 ### Chatterbox (separate venv)
 
 ```bash
-python -m venv .venv-chatterbox
-source .venv-chatterbox/bin/activate
+python3.11 -m venv venv-chatterbox
+source venv-chatterbox/bin/activate
 
 # Must be done in order — torch first, then chatterbox with --no-deps:
 pip install torch==2.6.0 torchaudio==2.6.0
@@ -101,7 +102,7 @@ pip install epub2txt docx2txt pdftotext html2text pyfiglet tqdm rich ollama
 ### Tortoise (separate venv)
 
 ```bash
-python -m venv .venv-tortoise
+python3.11 -m venv .venv-tortoise
 source .venv-tortoise/bin/activate
 pip install -r requirements-tortoise.txt
 ```
@@ -109,7 +110,7 @@ pip install -r requirements-tortoise.txt
 ### Sesame CSM (separate venv)
 
 ```bash
-python -m venv .venv-csm
+python3.11 -m venv .venv-csm
 source .venv-csm/bin/activate
 pip install -r requirements-csm.txt
 huggingface-cli login
@@ -118,7 +119,7 @@ huggingface-cli login
 ### OpenVoice (separate venv)
 
 ```bash
-python -m venv .venv-openvoice
+python3.11 -m venv .venv-openvoice
 source .venv-openvoice/bin/activate
 pip install -r requirements-openvoice.txt
 git clone https://github.com/myshell-ai/OpenVoice.git

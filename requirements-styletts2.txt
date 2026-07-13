@@ -1,3 +1,8 @@
-# StyleTTS 2 - compatible with coqui-tts venv
-# Just add this on top of requirements-coqui.txt
-styletts2
+# ========================= STYLETTS 2 (add-on for coqui venv) =========================
+# Install on top of requirements-coqui.txt in the same venv.
+#
+# Setup:
+#   source .venv/bin/activate
+#   pip install -r requirements-styletts2.txt
+
+styletts2==0.1.6

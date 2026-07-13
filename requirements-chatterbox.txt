@@ -1,48 +1,43 @@
 # ========================= CHATTERBOX (separate venv) =========================
 # Why separate: pins torch==2.6.0 + transformers==5.2.0, conflicts with coqui-tts
 #
-# Setup:
-#   python -m venv .venv-chatterbox
-#   source .venv-chatterbox/bin/activate
+# IMPORTANT: Use Python 3.11 (or 3.10-3.13). Python 3.14 has no torch==2.6.0 wheels.
 #
-#   Step 1: Install torch first (resolves CUDA wheels from PyPI):
+# Setup:
+#   python3.11 -m venv venv-chatterbox
+#   source venv-chatterbox/bin/activate
+#
+#   Step 1: Install torch first:
 #     pip install torch==2.6.0 torchaudio==2.6.0
 #
-#   Step 2: Install chatterbox without pulling its own deps (already installed):
+#   Step 2: Install chatterbox without pulling its own deps:
 #     pip install chatterbox-tts --no-deps
 #
 #   Step 3: Install remaining deps:
-#     pip install numpy librosa s3tokenizer transformers==5.2.0 diffusers==0.29.0
-#     pip install resemble-perth conformer==0.3.2 safetensors==0.5.3
-#     pip install spacy-pkuseg pykakasi==2.3.0 pyloudnorm omegaconf
-#
-#   Step 4: Install doc parsing tools:
-#     pip install epub2txt docx2txt pdftotext html2text pyfiglet tqdm rich ollama
+#     pip install -r requirements-chatterbox.txt
 #
 #   Then run doctospeech from this venv.
 
-# --- This file is a reference only. Follow the steps above. ---
+# --- Chatterbox (installed separately with --no-deps in step 2) ---
+numpy
+librosa==0.11.0
+s3tokenizer==0.3.0
+transformers==5.2.0
+diffusers==0.29.0
+resemble-perth==1.0.1
+conformer==0.3.2
+safetensors==0.5.3
+spacy-pkuseg
+pykakasi==2.3.0
+pyloudnorm==0.2.0
+omegaconf==2.3.1
 
-# torch==2.6.0
-# torchaudio==2.6.0
-# chatterbox-tts
-# numpy
-# librosa
-# s3tokenizer
-# transformers==5.2.0
-# diffusers==0.29.0
-# resemble-perth
-# conformer==0.3.2
-# safetensors==0.5.3
-# spacy-pkuseg
-# pykakasi==2.3.0
-# pyloudnorm
-# omegaconf
-# epub2txt
-# docx2txt
-# pdftotext
-# html2text
-# pyfiglet
-# tqdm
-# rich
-# ollama
+# --- Core ---
+epub2txt==0.1.6
+docx2txt==0.9
+pdftotext==4.0.0
+html2text==2025.4.15
+pyfiglet==1.0.4
+tqdm==4.68.4
+rich==15.0.0
+ollama==0.6.2
