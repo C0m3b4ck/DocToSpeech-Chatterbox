@@ -1,17 +1,5 @@
-# DocToSpeech
-
-[![Ollama](https://img.shields.io/badge/Ollama-%23D97757.svg?style=for-the-badge&logo=ollama&logoColor=white)](https://ollama.com)
-[![Coqui TTS](https://img.shields.io/badge/Coqui%20TTS-%233EA8A8.svg?style=for-the-badge&logo=coqui&logoColor=white)](https://github.com/idiap/coqui-ai-TTS)
-[![Agentic](https://img.shields.io/badge/Agentic-AI-%23FF6B6B.svg?style=for-the-badge&logo=openai&logoColor=white)](agent.md)
-[![XTTS v2](https://img.shields.io/badge/XTTS%20v2-%233EA8A8.svg?style=flat-square&logo=coqui&logoColor=white)](https://github.com/idiap/coqui-ai-TTS)
-[![Bark](https://img.shields.io/badge/Bark-%23F9A825.svg?style=flat-square&logo=suno&logoColor=white)](https://github.com/suno-ai/bark)
-[![VITS](https://img.shields.io/badge/VITS-%237B1FA2.svg?style=flat-square&logo=pytorch&logoColor=white)](https://github.com/jaywalnut310/vits)
-[![YourTTS](https://img.shields.io/badge/YourTTS-%2300897B.svg?style=flat-square&logo=coqui&logoColor=white)](https://github.com/Edresson/YourTTS)
-[![StyleTTS 2](https://img.shields.io/badge/StyleTTS%202-%23E91E63.svg?style=flat-square&logo=style&logoColor=white)](https://github.com/yl4579/StyleTTS2)
-[![Chatterbox](https://img.shields.io/badge/Chatterbox-%23FF5722.svg?style=flat-square&logo=resemble&logoColor=white)](https://github.com/resemble-ai/chatterbox) 
-[![Tortoise](https://img.shields.io/badge/Tortoise%20TTS-%23795548.svg?style=flat-square&logo=tortoise&logoColor=white)](https://github.com/neonbjb/tortoise-tts)
-[![OpenVoice](https://img.shields.io/badge/OpenVoice%20V2-%232196F3.svg?style=flat-square&logo=myshell&logoColor=white)](https://github.com/myshell-ai/OpenVoice) 
-[![Sesame CSM](https://img.shields.io/badge/Sesame%20CSM--1B-%239C27B0.svg?style=flat-square&logo=speech&logoColor=white)](https://github.com/SesameAILabs/csm) 
+# DocToSpeech 
+[![Ollama](https://img.shields.io/badge/Ollama-%23D97757.svg?style=for-the-badge&logo=ollama&logoColor=white)](https://ollama.com) [![Coqui TTS](https://img.shields.io/badge/Coqui%20TTS-%233EA8A8.svg?style=for-the-badge&logo=coqui&logoColor=white)](https://github.com/idiap/coqui-ai-TTS)[![Agentic](https://img.shields.io/badge/Agentic-AI-%23FF6B6B.svg?style=for-the-badge&logo=openai&logoColor=white)](agent.md)[![XTTS v2](https://img.shields.io/badge/XTTS%20v2-%233EA8A8.svg?style=flat-square&logo=coqui&logoColor=white)](https://github.com/idiap/coqui-ai-TTS)[![Bark](https://img.shields.io/badge/Bark-%23F9A825.svg?style=flat-square&logo=suno&logoColor=white)](https://github.com/suno-ai/bark)[![VITS](https://img.shields.io/badge/VITS-%237B1FA2.svg?style=flat-square&logo=pytorch&logoColor=white)](https://github.com/jaywalnut310/vits)[![YourTTS](https://img.shields.io/badge/YourTTS-%2300897B.svg?style=flat-square&logo=coqui&logoColor=white)](https://github.com/Edresson/YourTTS)[![StyleTTS 2](https://img.shields.io/badge/StyleTTS%202-%23E91E63.svg?style=flat-square&logo=style&logoColor=white)](https://github.com/yl4579/StyleTTS2)[![Chatterbox](https://img.shields.io/badge/Chatterbox-%23FF5722.svg?style=flat-square&logo=resemble&logoColor=white)](https://github.com/resemble-ai/chatterbox) [![Tortoise](https://img.shields.io/badge/Tortoise%20TTS-%23795548.svg?style=flat-square&logo=tortoise&logoColor=white)](https://github.com/neonbjb/tortoise-tts)[![OpenVoice](https://img.shields.io/badge/OpenVoice%20V2-%232196F3.svg?style=flat-square&logo=myshell&logoColor=white)](https://github.com/myshell-ai/OpenVoice) [![Sesame CSM](https://img.shields.io/badge/Sesame%20CSM--1B-%239C27B0.svg?style=flat-square&logo=speech&logoColor=white)](https://github.com/SesameAILabs/csm) 
 
 Convert documents (EPUB, PDF, DOCX, HTML, TXT) to speech using local AI text-to-speech models. No API keys required — everything runs on your hardware.
 
