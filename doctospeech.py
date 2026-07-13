@@ -1,476 +1,532 @@
-# /////////////////////////////         LIBRARY IMPORTS                 ///////////////////////////////
-import os # for relative paths
-from pathlib import Path  # for relative paths
-import io # for streams, including pdf_stream
-import pathlib # for misc path-related stuff, including extentions
-import time # for waiting during massive text prints
-from datetime import datetime # for timestamps
+import os
+import pathlib
+import sys
 
-import pyfiglet  # for ASCII art in greet()
-import torch  # for TTS functionality
-from TTS.api import TTS  # for TTS functionality
+from tqdm import tqdm
+import time
+from datetime import datetime
 
-from epub2txt import epub2txt # for epub to txt
-import pdftotext # for pdf to txt
-import docx2txt # for docx to txt
-import html2text # for html to txt
+import pyfiglet
+import torch
+from TTS.api import TTS
 
-# /////////////////////////////          USER INTERACTION FUNCTIONS            ////////////////////////////
+from epub2txt import epub2txt
+import pdftotext
+import docx2txt
+import html2text
 
+
+# ========================= TERMINAL COLORS =========================
+
+class C:
+    RESET   = "\033[0m"
+    BOLD    = "\033[1m"
+    DIM     = "\033[2m"
+    RED     = "\033[91m"
+    GREEN   = "\033[92m"
+    YELLOW  = "\033[93m"
+    CYAN    = "\033[96m"
+    MAGENTA = "\033[95m"
+
+def prompt(msg):
+    return input(f"{C.CYAN}? {C.RESET}{msg}")
+
+def info(msg):
+    print(f"{C.DIM}[*] {msg}{C.RESET}")
+
+def success(msg):
+    print(f"{C.GREEN}[+] {msg}{C.RESET}")
+
+def warn(msg):
+    print(f"{C.YELLOW}[!] {msg}{C.RESET}")
+
+def error(msg):
+    print(f"{C.RED}[!] {msg}{C.RESET}")
+
+def header(msg):
+    print(f"\n{C.CYAN}{C.BOLD}--- {msg} ---{C.RESET}")
+
+def divider():
+    print(f"{C.DIM}{'-' * 50}{C.RESET}")
+
+
+# ========================= PATH SAFETY =========================
+
+def safe_resolve(path):
+    """Resolve path and reject traversal outside current directory."""
+    resolved = os.path.realpath(path)
+    if ".." in path.split(os.sep):
+        warn(f"Path contains traversal components: {path}")
+    return resolved
+
+def validate_path_exists(path, label="path"):
+    """Check that a file or directory exists, return resolved path."""
+    if not os.path.exists(path):
+        error(f"{label} does not exist: {path}")
+        return None
+    return os.path.realpath(path)
+
+
+# ========================= USER INTERACTION =========================
 
 def greet():
-    ASCII_art_greet = pyfiglet.figlet_format("DocToSpeech", font="alphabet")
-    print(ASCII_art_greet)
+    ascii_art = pyfiglet.figlet_format("DocToSpeech", font="alphabet")
+    print(f"{C.CYAN}{ascii_art}{C.RESET}")
     time.sleep(1)
-    ASCII_art_credit = pyfiglet.figlet_format("By C0m3b4ck under MPL 2.0")
-    print(ASCII_art_credit)
+    credit = pyfiglet.figlet_format("By C0m3b4ck under MPL 2.0")
+    print(f"{C.DIM}{credit}{C.RESET}")
 
 def goodbye():
-    ASCII_art_bye = pyfiglet.figlet_format("Goodbye!", font='alphabet')
-    print(ASCII_art_bye)
+    ascii_art = pyfiglet.figlet_format("Goodbye!", font="alphabet")
+    print(f"{C.CYAN}{ascii_art}{C.RESET}")
     time.sleep(1)
-    ASCII_art_credit = pyfiglet.figlet_format("By C0m3b4ck under MPL 2.0")
-    print(ASCII_art_credit)
+    credit = pyfiglet.figlet_format("By C0m3b4ck under MPL 2.0")
+    print(f"{C.DIM}{credit}{C.RESET}")
+
 
 def get_user_input_volume():
-    choice = ""
-    while (len(choice) != 1) and choice != "s" and choice != "d":
-        choice = input("Use single file/directory? s/d: ")
-        choice.lower()
+    while True:
+        choice = prompt("Use single file or directory? (s/d): ").lower().strip()
         if choice == "s":
             get_user_input_docs()
         elif choice == "d":
             get_user_input_dir()
         else:
-            print("!!! Please input 's' or 'd' !!!")
+            warn("Please input 's' or 'd'")
+            continue
+
+        again = prompt("Process another document? (y/n): ").lower().strip()
+        if again != "y":
+            break
+
 
 def get_user_input_dir():
-    output_dir = input("Input output directory: ")
-    dir = input("Input document directory: ")
-    number = int(input("Type number of extentions to convert (leave 0 for all supported): "))
+    header("Directory Mode")
+
+    output_dir = prompt("Output directory: ")
+    output_dir = validate_path_exists(output_dir, "Output directory")
+    if output_dir is None:
+        return
+
+    doc_dir = prompt("Document directory: ")
+    doc_dir = validate_path_exists(doc_dir, "Document directory")
+    if doc_dir is None:
+        return
+
+    while True:
+        try:
+            number = int(prompt("Number of extensions to convert (0 = all supported): "))
+            if number < 0:
+                warn("Please input a non-negative number")
+                continue
+            break
+        except ValueError:
+            warn("Please input a number")
+
+    default_extentions = [".txt", ".pdf", ".html", ".docx", ".epub"]
     extention_list = []
-    file_list = []
-    txtfile_list = []
-    file_extention = ""
-    if (number > 0):
-        for x in range(1, number):
-            extention = input("Type extention " +  str(x) + " in this format: '.extention': ")
-            extention_list.append(extention)
+    if number > 0:
+        for x in range(1, number + 1):
+            ext = prompt(f"Extension {x}/{number} (e.g. '.pdf'): ").lower().strip()
+            if not ext.startswith("."):
+                ext = "." + ext
+            extention_list.append(ext)
     else:
-        print("Used default extention list.")
-        extention_list = [".txt", ".pdf", ".html", ".docx", ".epub"] # default extention list
+        info("Using default extension list")
+        extention_list = default_extentions
 
-    print("Started sorting files in input dir...")
-    for x in os.listdir(dir): # all files in dir
-        for x in extention_list: # all files with an extention that is in the list
-            if x.endswith(tuple(extention_list)): # if a file actually has one of these extentions
-                file_list.append(x)
-    print("Finished sorting files in input dir.")
+    header("Scanning files")
+    file_list = [
+        f for f in os.listdir(doc_dir)
+        if os.path.isfile(os.path.join(doc_dir, f))
+        and f.endswith(tuple(extention_list))
+    ]
 
-    # get .txt files for all files from file list
-    print("Started converting files to .txt...")
-    for n in file_list:
-        if file_extention == ".epub":
-            txt_path = epub_to_text(file_list[n])
-            txtfile_list.append(txt_path)
-        elif file_extention == ".pdf":
-            txt_path = pdf_to_text(file_list[n])
-            txtfile_list.append(txt_path)
-        elif file_extention == ".docx":
-            txt_path = docx_to_text(file_list[n])
-            txtfile_list.append(txt_path)
-        elif file_extention == ".doc":
-            txt_path = doc_to_text(file_list[n])
-            txtfile_list.append(txt_path)
-        elif file_extention in (".html", ".htm"):
-            txt_path = html_to_text(file_list[n])
-            txtfile_list.append(txt_path)
-        elif file_extention == ".djvu":
-            txt_path = djvu_to_text(file_list[n])
-            txtfile_list.append(txt_path)
-    print("Finished converting files to .txt")
+    if not file_list:
+        warn("No matching files found in directory")
+        return
 
-    # get user tts input
+    info(f"Found {C.BOLD}{len(file_list)}{C.RESET}{C.DIM} file(s){C.RESET}")
+    for f in file_list:
+        print(f"  {C.DIM}>{C.RESET} {f}")
+    divider()
+
+    epub_chapter_choice = ""
+    if any(f.endswith(".epub") for f in file_list):
+        while epub_chapter_choice not in ("y", "n"):
+            epub_chapter_choice = prompt("Split epub files into separate chapters? (y/n): ").lower()
+
+    header("Converting to .txt")
+    txtfile_list = []
+    for filename in tqdm(file_list, desc="Converting", bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}]"):
+        full_path = os.path.join(doc_dir, filename)
+        file_ext = pathlib.Path(filename).suffix.lower()
+        try:
+            if file_ext == ".epub":
+                txt_paths = epub_to_text(full_path, epub_chapter_choice)
+                txtfile_list.extend(txt_paths)
+            elif file_ext == ".pdf":
+                txt_path = pdf_to_text(full_path)
+                txtfile_list.append(txt_path)
+            elif file_ext == ".docx":
+                txt_path = docx_to_text(full_path)
+                txtfile_list.append(txt_path)
+            elif file_ext == ".doc":
+                warn(f".doc not implemented yet: {filename}")
+            elif file_ext in (".html", ".htm"):
+                txt_path = html_to_text(full_path)
+                txtfile_list.append(txt_path)
+            elif file_ext == ".djvu":
+                warn(f".djvu not implemented yet: {filename}")
+        except Exception as e:
+            error(f"Failed to convert {filename}: {e}")
+
+    if not txtfile_list:
+        warn("No files were successfully converted")
+        return
+
+    success(f"Converted {C.BOLD}{len(txtfile_list)}{C.RESET}{C.GREEN} file(s){C.RESET}")
+    divider()
+
+    header("TTS Options")
+    language = prompt("Language code (e.g. 'en'): ")
+
     choice = ""
     cloning_path = ""
     use_cloning = False
     preset_speaker = ""
-    tts_initialized = False
-    tts = None
-
-    print("/// TTS options ///")
-    language = input("Language acronym (en for english): ")
-
-    while (len(choice) != 1) and choice != "c" and choice != "p":
-        choice = input("Use cloning voice (c) or preset voice? c/p: ")
-        choice.lower()
+    while choice not in ("c", "p"):
+        choice = prompt("Voice type: cloning (c) or preset (p)? ").lower()
         if choice == "c":
-            cloning_path = input("Input cloning voice .wav relative path: ")
-            #os.path.join(os.path.dirname(__file__), cloning_path)
+            cloning_path = prompt("Path to .wav clone voice: ")
             use_cloning = True
         elif choice == "p":
-            tts = make_tts_init(show_speakers=True)
-            preset_speaker = input("Input preset speaker name: ")
+            preset_speaker = prompt("Preset speaker name: ")
             use_cloning = False
         else:
-            print("!!! Please input 'c' or 'p' !!!")
+            warn("Please input 'c' or 'p'")
 
-    # make all of the .wav files
-    print("Making all .wav files. This will take a long time...")
-    for i in txtfile_list:
-        with open(txtfile_list[i], "r") as file:
+    tts = make_tts_init(show_speakers=(choice == "p"))
+
+    header("Generating audio")
+    info(f"Processing {C.BOLD}{len(txtfile_list)}{C.RESET}{C.DIM} file(s)...{C.RESET}")
+    for txt_path in txtfile_list:
+        with open(txt_path, "r") as file:
             text_to_say = file.read()
-        make_tts_voiceover(
-            text_to_say,
-            use_cloning,
-            preset_speaker,
-            cloning_path,
-            language,
-            txtfile_list[i],
-            tts,
-            output_dir
-        )
+        output_filename = os.path.basename(txt_path).rsplit('.', 1)[0] + ".wav"
+        output_path = os.path.join(output_dir, output_filename)
+        make_tts_voiceover(text_to_say, use_cloning, preset_speaker, cloning_path, language, tts, output_path)
+
+    success("All files processed!")
 
 
 def get_user_input_docs():
-    txt_path = ""
-    choice = ""
-    file_extention = ""
+    while True:
+        header("Single File Mode")
+        info("Supported formats: PDF, EPUB, DOCX, DOC, HTML, DJVU, TXT")
 
-    print("Currently supported formats: [PDF, EPUB, DOCX, DOC, HTML, DJVU, TXT]")
-    doc_path = str(input("Input doc path: "))
-    print("Document path:", doc_path)
-    file_extention = pathlib.Path(doc_path).suffix.lower()
-    print("Document file extention:", file_extention)
+        doc_path = prompt("Document path: ")
+        doc_path = validate_path_exists(doc_path, "Document")
+        if doc_path is None:
+            continue
 
-    # Convert to .txt, then return .txt path
-    if file_extention == ".epub":
-        txt_path = epub_to_text(doc_path)
-    elif file_extention == ".pdf":
-        txt_path = pdf_to_text(doc_path)
-    elif file_extention == ".docx":
-        txt_path = docx_to_text(doc_path)
-    elif file_extention == ".doc":
-        txt_path = doc_to_text(doc_path)
-    elif file_extention in (".html", ".htm"):
-        txt_path = html_to_text(doc_path)
-    elif file_extention == ".djvu":
-        txt_path = djvu_to_text(doc_path)
-    elif file_extention == ".txt":
-        print("File already in raw text format! Proceeding to tts option selection...")
-        txt_path = doc_path
-    else:
-        print("Unrecognized extention.")
+        file_ext = pathlib.Path(doc_path).suffix.lower()
+        info(f"Extension: {C.BOLD}{file_ext}{C.RESET}")
 
-        while len(choice) != 1 or choice not in ("y", "n"):
-             choice = input("Treat the inputted doc as text file? y/n: ").lower()
-             if choice == "y":
-                 print("File already in raw text format! Proceeding to tts option selection...")
-                 txt_path = doc_path
-             elif choice == "n":
-                 print("Unknown file extension. Closing program.")
-                 exit()
+        try:
+            if file_ext == ".epub":
+                txt_paths = epub_to_text(doc_path)
+                for txt_path in txt_paths:
+                    get_user_input_tts(txt_path)
+            elif file_ext == ".pdf":
+                txt_path = pdf_to_text(doc_path)
+                get_user_input_tts(txt_path)
+            elif file_ext == ".docx":
+                txt_path = docx_to_text(doc_path)
+                get_user_input_tts(txt_path)
+            elif file_ext == ".doc":
+                warn("Not implemented yet (requires .doc to .docx conversion)")
+                continue
+            elif file_ext in (".html", ".htm"):
+                txt_path = html_to_text(doc_path)
+                get_user_input_tts(txt_path)
+            elif file_ext == ".djvu":
+                warn("Not implemented yet")
+                continue
+            elif file_ext == ".txt":
+                info("File is already plain text, proceeding to TTS...")
+                get_user_input_tts(doc_path)
+            else:
+                warn(f"Unrecognized extension: {file_ext}")
+                choice = prompt("Treat as plain text? (y/n): ").lower()
+                if choice == "y":
+                    info("Treating as plain text, proceeding to TTS...")
+                    get_user_input_tts(doc_path)
+                else:
+                    info("Returning to file selection")
+                    continue
+        except Exception as e:
+            error(f"Something went wrong: {e}")
+            retry = prompt("Try again? (y/n): ").lower()
+            if retry != "y":
+                break
+            continue
 
-    get_user_input_tts(txt_path)
+        break
 
 
 def get_user_input_tts(txt_path):
-    choice = ""
+    header("TTS Configuration")
+
+    output_file_name = prompt("Output filename (without .wav): ").strip()
+
     choice_timestamp = ""
+    while choice_timestamp not in ("y", "n"):
+        choice_timestamp = prompt("Add timestamp to filename? (y/n): ").lower()
+
+    if choice_timestamp == "y":
+        ts = datetime.now().timestamp()
+        output_path = f"{output_file_name}_{ts}.wav"
+        info(f"Output: {C.BOLD}{output_path}{C.RESET}")
+    else:
+        output_path = output_file_name + ".wav"
+        info(f"Output: {C.BOLD}{output_path}{C.RESET}")
+
+    language = prompt("Language code (e.g. 'en'): ")
+
+    choice = ""
     cloning_path = ""
     use_cloning = False
     preset_speaker = ""
-    tts_initialized = False
     tts = None
-    output_path = ""
-
-    output_file_name = input("Output file name (without *.wav): ").strip()
-    while (len(choice_timestamp) != 1) and choice_timestamp != "c" and choice_timestamp != "p":
-        choice_timestamp = input("Add timestamp to file name? y/n: ")
-        choice_timestamp.lower()
-        if choice_timestamp == "y":
-            # Get current datetime object
-            current_datetime = datetime.now()
-            # Convert datetime object to timestamp
-            current_timestamp = current_datetime.timestamp()
-            print("---> Current Timestamp:", current_timestamp)
-            output_path = (output_file_name + "_" + str(current_timestamp)) # .wav extention is attached automatically
-            print("---> Output file name: ", output_path)
-        elif choice_timestamp == "n":
-            output_path = output_file_name + ".wav"
-            print("---> Not adding timestamp.")
-        else:
-            print("!!! Please input 'y' or 'n' !!!")
-    language = input("Language acronym (en for english): ")
-
-    while (len(choice) != 1) and choice != "c" and choice != "p":
-        choice = input("Use cloning voice (c) or preset voice? c/p: ")
-        choice.lower()
+    while choice not in ("c", "p"):
+        choice = prompt("Voice type: cloning (c) or preset (p)? ").lower()
         if choice == "c":
-            cloning_path = input("Input cloning voice .wav relative path: ")
-            #os.path.join(os.path.dirname(__file__), cloning_path)
+            cloning_path = prompt("Path to .wav clone voice: ")
             use_cloning = True
         elif choice == "p":
             tts = make_tts_init(show_speakers=True)
-            preset_speaker = input("Input preset speaker name: ")
+            preset_speaker = prompt("Preset speaker name: ")
             use_cloning = False
         else:
-            print("!!! Please input 'c' or 'p' !!!")
+            warn("Please input 'c' or 'p'")
+
     with open(txt_path, "r") as file:
         file_contents = file.read()
-    print("File contents: ", file_contents)
 
-    # call make_tts_voiceover with all of the arguments
-    make_tts_voiceover(
-        file_contents,
-        use_cloning,
-        preset_speaker,
-        cloning_path,
-        language,
-        output_file_name,
-        tts,
-        output_path
-    )
+    preview = file_contents[:200] + ("..." if len(file_contents) > 200 else "")
+    info(f"Text preview: {C.DIM}{preview}{C.RESET}")
 
-# /////////////////////         DOCS TO TXT FUNCTIONS           //////////////////////////
-def epub_to_text(doc_path):
-    txt_string = ""
-    # output as a list of chapters
-    ch_list = epub2txt(doc_path, outputlist=True) # chapter titles will be available as epub2txt.content_titles if available
-    # convert .epub to disinfected string
+    make_tts_voiceover(file_contents, use_cloning, preset_speaker, cloning_path, language, tts, output_path)
+
+
+# ========================= DOC -> TXT =========================
+
+def epub_to_text(doc_path, chapter_choice=None):
+    if chapter_choice not in ("y", "n"):
+        while True:
+            chapter_choice = prompt("Split epub into separate chapters? (y/n): ").lower()
+            if chapter_choice in ("y", "n"):
+                break
+
     try:
-        txt_string = epub2txt(doc_path)
+        chapter_list = epub2txt(doc_path, outputlist=True)
     except Exception as e:
-        print("!!! An error occurred while converting file: ", e)
-        print("Please select different file.")
-        get_user_input_docs()
-    else:
-        print("Succesfully converted .epub to .txt!")
+        error(f"Failed to read epub: {e}")
+        raise
 
-    # save disinfected string into .txt file
-    try:
-        save_text = open((doc_path + ".txt"), "w")
-        save_text.write(txt_string)
-        save_text.close
-    except Exception as e:
-        print("!!! An error occurred while saving .txt: ", e)
-        print("---> Please check write permissions in this directory.")
-        time.sleep(3)
-        print("Returning to file selection.")
-        get_user_input_docs()
+    info(f"Read {C.BOLD}{len(chapter_list)}{C.RESET}{C.DIM} chapter(s){C.RESET}")
+
+    base_name = doc_path.rsplit('.', 1)[0]
+    txt_files = []
+
+    if chapter_choice == "y":
+        for i, chapter in enumerate(chapter_list):
+            chapter_file = f"{base_name}_chapter_{i + 1}.txt"
+            with open(chapter_file, "w") as f:
+                f.write(chapter)
+            txt_files.append(chapter_file)
+        del chapter_list
+        success(f"Saved {len(txt_files)} chapter files")
     else:
-        print("Successfully saved file!")
-    txt_file = doc_path + ".txt"
-    print("---> Finished text file: ", txt_file)
-    return txt_file
+        full_txt = "\n\n".join(chapter_list)
+        del chapter_list
+        txt_file = doc_path + ".txt"
+        with open(txt_file, "w") as f:
+            f.write(full_txt)
+        del full_txt
+        txt_files.append(txt_file)
+        success(f"Saved: {txt_file}")
+
+    return txt_files
+
+
 def pdf_to_text(doc_path):
     choice = ""
-    password = ""
-    pdf = ""
-    txt_file = ""
-    while (len(choice) != 1) and choice != "y" and choice != "n":
-        choice = input("Is PDF password-protected? y/n: ")
-        choice.lower()
-        if choice == "y":
-            password = input("Input PDF password: ")
-            try:
-                # If it's password-protected
-                with open(doc_path, "rb") as f:
-                    pdf = pdftotext.PDF(f, password)
-            except Exception as e:
-                print("!!! An exception occurred while opening PDF: ",e)
-                time.sleep(3)
-                print("Returning to file selection.")
-                get_user_input_docs()
-            else:
-                print("PDF opened succesfully!")
-        elif choice == "n":
-            try:
-                # Load your PDF
-                #with open(doc_path, "rb") as f:
-                #    pass
-                doc_path_abs = os.path.abspath(doc_path)
-                print("CWD: ", os.getcwd())
-                print("Resolved path: ", doc_path_abs)
-                print("Exists: ", os.path.isfile(doc_path_abs))
-                with open(doc_path_abs, "rb") as f:
-                    pdf_bytes = f.read()
-                pdf_stream = io.BytesIO(pdf_bytes)
-                pdf = pdftotext.PDF(pdf_stream)
-            except Exception as e:
-                print("!!! An exception occurred while opening PDF: ",e)
-                time.sleep(3)
-                print("Returning to file selection.")
-                get_user_input_docs()
-            else:
-                print("PDF opened succesfully!")
-        else:
-            print("!!! Please input 'y' or 'n' !!!")
+    password = None
+    pdf = None
 
-    # How many pages?
-    print("PDF pages: ", len(pdf))
+    while choice not in ("y", "n"):
+        choice = prompt("Is this PDF password-protected? (y/n): ").lower()
 
-    while (len(choice) != 1) and choice != "c" and choice != "p":
-        choice = input("Show all PDF pages? y/n: ")
-        choice.lower()
-        if choice == "y":
-            # Iterate over all the pages
-            for page in pdf:
-                print(page)
-        elif choice == "n":
-            print("Not showing.")
-        else:
-            print("Unknown input - defaulting to not printing.")
-
-
-    # Read all the text into one string
-    txt_string = "\n\n".join(pdf)
-
-    # save disinfected string into .txt file
     try:
-        txt_file = doc_path + ".txt"
-        save_text = open((doc_path + ".txt"), "w")
-        save_text.write(txt_string)
-        save_text.close
+        with open(doc_path, "rb") as f:
+            if choice == "y":
+                password = prompt("Enter PDF password: ")
+                pdf = pdftotext.PDF(f, password)
+            else:
+                pdf = pdftotext.PDF(f)
     except Exception as e:
-        print("!!! An error occurred while saving .txt: ", e)
-        print("---> Please check write permissions.")
-        time.sleep(3)
-        print("Returning to file selection.")
-        get_user_input_docs()
-    else:
-        print("Successfully saved file: ", txt_file)
-        return txt_file
+        error(f"Failed to open PDF: {e}")
+        raise
+    finally:
+        password = None
+
+    info(f"PDF has {C.BOLD}{len(pdf)}{C.RESET}{C.DIM} page(s){C.RESET}")
+
+    show = ""
+    while show not in ("y", "n"):
+        show = prompt("Show all pages? (y/n): ").lower()
+    if show == "y":
+        for page in pdf:
+            print(page)
+
+    txt_file = doc_path + ".txt"
+    try:
+        with open(txt_file, "w") as save_text:
+            for i, page in enumerate(pdf):
+                if i > 0:
+                    save_text.write("\n\n")
+                save_text.write(page)
+        del pdf
+    except Exception as e:
+        error(f"Failed to save txt: {e}")
+        raise
+
+    success(f"Saved: {txt_file}")
+    return txt_file
+
+
 def docx_to_text(doc_path):
     txt_string = docx2txt.process(doc_path)
-    # save disinfected string into .txt file
-    try:
-        txt_file = doc_path + ".txt"
-        save_text = open((doc_path + ".txt"), "w")
-        save_text.write(txt_string)
-        save_text.close
-    except Exception as e:
-        print("!!! An error occurred while saving .txt: ", e)
-        print("---> Please check write permissions. ")
-        time.sleep(3)
-        print("Returning to file selection.")
-        get_user_input_docs()
-    else:
-        print("Successfully saved file: ", txt_file)
-        return txt_file
-def doc_to_text(doc_path):
-    # actually implement
-    print("Not done yet! Will require .doc to .docx conversion.")
-def html_to_text(doc_path):
-    html_contents = ""
+    txt_file = doc_path + ".txt"
 
-    # open html file
+    try:
+        with open(txt_file, "w") as save_text:
+            save_text.write(txt_string)
+        del txt_string
+    except Exception as e:
+        error(f"Failed to save txt: {e}")
+        raise
+
+    success(f"Saved: {txt_file}")
+    return txt_file
+
+
+def doc_to_text(doc_path):
+    warn("Not implemented yet -- requires .doc to .docx conversion")
+
+
+def html_to_text(doc_path):
     try:
         with open(doc_path, 'r') as file:
             html_contents = file.read()
     except Exception as e:
-        print("!!! An error occurred while opening HTML: ", e)
-        print("---> Please check read permissions in this directory.")
-        time.sleep(3)
-        print("Returning to file selection.")
-        get_user_input_docs()
-    else:
-        print("Succesfully read HTML file.")
+        error(f"Failed to read HTML: {e}")
+        raise
 
-    # convert html contents
     try:
         h = html2text.HTML2Text()
-        h.ignore_links = True # ignore links
+        h.ignore_links = True
         txt_string = h.handle(html_contents)
+        del html_contents
     except Exception as e:
-        print("!!! An error occurred while saving .txt: ", e)
-        print("---> Please check write permissions in this directory.")
-        time.sleep(3)
-        print("Returning to file selection.")
-        get_user_input_docs()
-    else:
-        print("Succesfully sanitized HTML contents.")
-    # save disinfected string into .txt file
-    try:
-        txt_file = doc_path + ".txt"
-        save_text = open((doc_path + ".txt"), "w")
-        save_text.write(txt_string)
-        save_text.close
-    except Exception as e:
-        print("!!! An error occurred while saving .txt: ", e)
-        print("---> Please check write permissions in this directory.")
-        time.sleep(3)
-        print("Returning to file selection.")
-        get_user_input_docs()
-    else:
-        print("Successfully saved file: ", txt_file)
-        return txt_file
-def djvu_to_text(doc_path):
-    # actually implement
-    print("Not done yet!")
-# ////////////////////            TTS FUNCTIONS           /////////////////
-def make_tts_init(show_speakers): # initializes tts object
-    print("Checking for CUDA/CPU...")
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print("Using device:", device)
+        error(f"Failed to convert HTML: {e}")
+        raise
 
-    print("Initializing TTS model...")
-    tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device) # model that supports both cloning and speakers
+    txt_file = doc_path + ".txt"
+    try:
+        with open(txt_file, "w") as save_text:
+            save_text.write(txt_string)
+        del txt_string
+    except Exception as e:
+        error(f"Failed to save txt: {e}")
+        raise
+
+    success(f"Saved: {txt_file}")
+    return txt_file
+
+
+def djvu_to_text(doc_path):
+    warn("Not implemented yet")
+
+
+# ========================= TTS =========================
+
+def make_tts_init(show_speakers):
+    header("Initializing TTS Model")
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    info(f"Device: {C.BOLD}{device}{C.RESET}")
+
+    start = time.time()
+    tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
+    elapsed = time.time() - start
+    success(f"Model loaded in {C.BOLD}{elapsed:.1f}s{C.RESET}")
 
     if show_speakers:
         if hasattr(tts, "speakers") and tts.speakers:
-            print("Available speakers:")
+            info(f"Available speakers ({len(tts.speakers)}):")
             for speaker in tts.speakers:
-                print("-", speaker)
+                print(f"  {C.DIM}>{C.RESET} {speaker}")
         else:
-            print("This model does not expose a speaker list.")
+            info("This model does not expose a speaker list")
 
     return tts
 
-def make_tts_voiceover(
-    text_to_say,
-    use_cloning,
-    preset_voice,
-    cloning_audio_relative_path,
-    language,
-    file_name,
-    tts,
-    output_path
-):
-    if (tts is None):
-        tts = make_tts_init(show_speakers=False)
-    # Run TTS
-    # ❗ XTTS supports both, but many models allow only one of the `speaker` and
-    # `speaker_wav` arguments
 
-    # TTS with list of amplitude values as output, clone the voice from `cloning_audio_relative_path`
+def make_tts_voiceover(text_to_say, use_cloning, preset_voice, cloning_audio_path, language, tts, output_path):
+    if tts is None:
+        tts = make_tts_init(show_speakers=False)
+
+    info(f"Generating: {C.BOLD}{output_path}{C.RESET}")
+    start = time.time()
+
     try:
         if use_cloning:
             tts.tts_to_file(
                 text=text_to_say,
-                speaker_wav=cloning_audio_relative_path,
+                speaker_wav=cloning_audio_path,
                 language=language,
                 file_path=output_path,
             )
         else:
-            # TTS to a file, use a preset speaker
             tts.tts_to_file(
                 text=text_to_say,
                 speaker=preset_voice,
                 language=language,
                 file_path=output_path,
             )
+        elapsed = time.time() - start
+        success(f"Done in {C.BOLD}{elapsed:.1f}s{C.RESET}")
+        preview = text_to_say[:200] + ("..." if len(text_to_say) > 200 else "")
+        info(f"Preview: {C.DIM}{preview}{C.RESET}")
     except Exception as e:
-        print("!!! An error occured while trying to generate file: ", e)
-    else:
-        print("~~~ File made successfully!!! ~~~")
-        print("Output file path: ", output_path)
-        print("Language: ", language)
-        time.sleep(1)
-        print("Text read: ", text_to_say)
+        error(f"TTS generation failed: {e}")
+        raise
 
-# /////////////////////////////////                 MAIN FUNCTION - ENTRY POINT                     //////////////////////////////
+
+# ========================= MAIN =========================
+
 if __name__ == "__main__":
-    greet()
-    get_user_input_volume()
-    goodbye()
+    try:
+        greet()
+        get_user_input_volume()
+        goodbye()
+    except KeyboardInterrupt:
+        print()
+        warn("Interrupted")
+        sys.exit(1)
+    except Exception as e:
+        error(f"Fatal: {e}")
+        sys.exit(1)
