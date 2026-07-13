@@ -1,2 +1,8 @@
 venv311 venv311_tts pyttsx3
 *.wav
+*.epub
+*.djvu
+*.pdf
+*.html
+*.doc
+*.docx

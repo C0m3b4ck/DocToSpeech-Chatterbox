@@ -1,11 +1,19 @@
 # /////////////////////////////         LIBRARY IMPORTS                 ///////////////////////////////
-import pathlib  # for relative paths
+import os # for relative paths
+from pathlib import Path  # for relative paths
+import io # for streams, including pdf_stream
+import pathlib # for misc path-related stuff, including extentions
 import time # for waiting during massive text prints
-from datetime import datetime  # for timestamps
+from datetime import datetime # for timestamps
 
 import pyfiglet  # for ASCII art in greet()
 import torch  # for TTS functionality
 from TTS.api import TTS  # for TTS functionality
+
+from epub2txt import epub2txt # for epub to txt
+import pdftotext # for pdf to txt
+import docx2txt # for docx to txt
+import html2text # for html to txt
 
 # /////////////////////////////          USER INTERACTION FUNCTIONS            ////////////////////////////
 
@@ -124,20 +132,177 @@ def get_user_input_tts(txt_path):
 
 # /////////////////////         DOCS TO TXT FUNCTIONS           //////////////////////////
 def epub_to_text(doc_path):
-    # actually implement
-    print("Not done yet!")
+    txt_string = ""
+    # output as a list of chapters
+    ch_list = epub2txt(doc_path, outputlist=True) # chapter titles will be available as epub2txt.content_titles if available
+    # convert .epub to disinfected string
+    try:
+        txt_string = epub2txt(doc_path)
+    except Exception as e:
+        print("!!! An error occurred while converting file: ", e)
+        print("Please select different file.")
+        get_user_input_docs()
+    else:
+        print("Succesfully converted .epub to .txt!")
+
+    # save disinfected string into .txt file
+    try:
+        save_text = open((doc_path + ".txt"), "w")
+        save_text.write(txt_string)
+        save_text.close
+    except Exception as e:
+        print("!!! An error occurred while saving .txt: ", e)
+        print("---> Please check write permissions in this directory.")
+        time.sleep(3)
+        print("Returning to file selection.")
+        get_user_input_docs()
+    else:
+        print("Successfully saved file!")
+    txt_file = doc_path + ".txt"
+    print("---> Finished text file: ", txt_file)
+    return txt_file
 def pdf_to_text(doc_path):
-    # actually implement
-    print("Not done yet!")
+    choice = ""
+    password = ""
+    pdf = ""
+    txt_file = ""
+    while (len(choice) != 1) and choice != "y" and choice != "n":
+        choice = input("Is PDF password-protected? y/n: ")
+        choice.lower()
+        if choice == "y":
+            password = input("Input PDF password: ")
+            try:
+                # If it's password-protected
+                with open(doc_path, "rb") as f:
+                    pdf = pdftotext.PDF(f, password)
+            except Exception as e:
+                print("!!! An exception occurred while opening PDF: ",e)
+                time.sleep(3)
+                print("Returning to file selection.")
+                get_user_input_docs()
+            else:
+                print("PDF opened succesfully!")
+        elif choice == "n":
+            try:
+                # Load your PDF
+                #with open(doc_path, "rb") as f:
+                #    pass
+                doc_path_abs = os.path.abspath(doc_path)
+                print("CWD: ", os.getcwd())
+                print("Resolved path: ", doc_path_abs)
+                print("Exists: ", os.path.isfile(doc_path_abs))
+                with open(doc_path_abs, "rb") as f:
+                    pdf_bytes = f.read()
+                pdf_stream = io.BytesIO(pdf_bytes)
+                pdf = pdftotext.PDF(pdf_stream)
+            except Exception as e:
+                print("!!! An exception occurred while opening PDF: ",e)
+                time.sleep(3)
+                print("Returning to file selection.")
+                get_user_input_docs()
+            else:
+                print("PDF opened succesfully!")
+        else:
+            print("!!! Please input 'y' or 'n' !!!")
+
+    # How many pages?
+    print("PDF pages: ", len(pdf))
+
+    while (len(choice) != 1) and choice != "c" and choice != "p":
+        choice = input("Show all PDF pages? y/n: ")
+        choice.lower()
+        if choice == "y":
+            # Iterate over all the pages
+            for page in pdf:
+                print(page)
+        elif choice == "n":
+            print("Not showing.")
+        else:
+            print("Unknown input - defaulting to not printing.")
+
+
+    # Read all the text into one string
+    txt_string = "\n\n".join(pdf)
+
+    # save disinfected string into .txt file
+    try:
+        txt_file = doc_path + ".txt"
+        save_text = open((doc_path + ".txt"), "w")
+        save_text.write(txt_string)
+        save_text.close
+    except Exception as e:
+        print("!!! An error occurred while saving .txt: ", e)
+        print("---> Please check write permissions.")
+        time.sleep(3)
+        print("Returning to file selection.")
+        get_user_input_docs()
+    else:
+        print("Successfully saved file: ", txt_file)
+        return txt_file
 def docx_to_text(doc_path):
-    # actually implement
-    print("Not done yet!")
+    txt_string = docx2txt.process(doc_path)
+    # save disinfected string into .txt file
+    try:
+        txt_file = doc_path + ".txt"
+        save_text = open((doc_path + ".txt"), "w")
+        save_text.write(txt_string)
+        save_text.close
+    except Exception as e:
+        print("!!! An error occurred while saving .txt: ", e)
+        print("---> Please check write permissions. ")
+        time.sleep(3)
+        print("Returning to file selection.")
+        get_user_input_docs()
+    else:
+        print("Successfully saved file: ", txt_file)
+        return txt_file
 def doc_to_text(doc_path):
     # actually implement
-    print("Not done yet!")
+    print("Not done yet! Will require .doc to .docx conversion.")
 def html_to_text(doc_path):
-    # actually implement
-    print("Not done yet!")
+    html_contents = ""
+
+    # open html file
+    try:
+        with open(doc_path, 'r') as file:
+            html_contents = file.read()
+    except Exception as e:
+        print("!!! An error occurred while opening HTML: ", e)
+        print("---> Please check read permissions in this directory.")
+        time.sleep(3)
+        print("Returning to file selection.")
+        get_user_input_docs()
+    else:
+        print("Succesfully read HTML file.")
+
+    # convert html contents
+    try:
+        h = html2text.HTML2Text()
+        h.ignore_links = True # ignore links
+        txt_string = h.handle(html_contents)
+    except Exception as e:
+        print("!!! An error occurred while saving .txt: ", e)
+        print("---> Please check write permissions in this directory.")
+        time.sleep(3)
+        print("Returning to file selection.")
+        get_user_input_docs()
+    else:
+        print("Succesfully sanitized HTML contents.")
+    # save disinfected string into .txt file
+    try:
+        txt_file = doc_path + ".txt"
+        save_text = open((doc_path + ".txt"), "w")
+        save_text.write(txt_string)
+        save_text.close
+    except Exception as e:
+        print("!!! An error occurred while saving .txt: ", e)
+        print("---> Please check write permissions in this directory.")
+        time.sleep(3)
+        print("Returning to file selection.")
+        get_user_input_docs()
+    else:
+        print("Successfully saved file: ", txt_file)
+        return txt_file
 def djvu_to_text(doc_path):
     # actually implement
     print("Not done yet!")
@@ -194,7 +359,7 @@ def make_tts_voiceover(
                 file_path=output_path,
             )
     except Exception as e:
-        print("An error occured while trying to generate file: ", e)
+        print("!!! An error occured while trying to generate file: ", e)
     else:
         print("~~~ File made successfully!!! ~~~")
         print("Output file path: ", output_path)

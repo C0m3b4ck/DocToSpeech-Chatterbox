@@ -9,8 +9,12 @@ Uses coqui-tts for realistic-sounding text-to-speech models. **NVIDIA GPU recomm
 - .html,
 - .htm,
 - .docx,
-- .doc,
 ### Added
+- .epub,
+- .pdf,
+- .djvu,
+- .html, 
+- .htm,
 - .txt and all other raw text formats
 # To-do
 - Add chapters (one doc, multiple audio files) (preferably convert doc to .chp, which is a text file with chapter marks added)
