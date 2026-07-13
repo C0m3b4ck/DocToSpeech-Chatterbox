@@ -21,14 +21,116 @@ import html2text # for html to txt
 def greet():
     ASCII_art_greet = pyfiglet.figlet_format("DocToSpeech", font="alphabet")
     print(ASCII_art_greet)
+    time.sleep(1)
     ASCII_art_credit = pyfiglet.figlet_format("By C0m3b4ck under MPL 2.0")
     print(ASCII_art_credit)
 
 def goodbye():
     ASCII_art_bye = pyfiglet.figlet_format("Goodbye!", font='alphabet')
     print(ASCII_art_bye)
+    time.sleep(1)
     ASCII_art_credit = pyfiglet.figlet_format("By C0m3b4ck under MPL 2.0")
     print(ASCII_art_credit)
+
+def get_user_input_volume():
+    choice = ""
+    while (len(choice) != 1) and choice != "s" and choice != "d":
+        choice = input("Use single file/directory? s/d: ")
+        choice.lower()
+        if choice == "s":
+            get_user_input_docs()
+        elif choice == "d":
+            get_user_input_dir()
+        else:
+            print("!!! Please input 's' or 'd' !!!")
+
+def get_user_input_dir():
+    output_dir = input("Input output directory: ")
+    dir = input("Input document directory: ")
+    number = int(input("Type number of extentions to convert (leave 0 for all supported): "))
+    extention_list = []
+    file_list = []
+    txtfile_list = []
+    file_extention = ""
+    if (number > 0):
+        for x in range(1, number):
+            extention = input("Type extention " +  str(x) + " in this format: '.extention': ")
+            extention_list.append(extention)
+    else:
+        print("Used default extention list.")
+        extention_list = [".txt", ".pdf", ".html", ".docx", ".epub"] # default extention list
+
+    print("Started sorting files in input dir...")
+    for x in os.listdir(dir): # all files in dir
+        for x in extention_list: # all files with an extention that is in the list
+            if x.endswith(tuple(extention_list)): # if a file actually has one of these extentions
+                file_list.append(x)
+    print("Finished sorting files in input dir.")
+
+    # get .txt files for all files from file list
+    print("Started converting files to .txt...")
+    for n in file_list:
+        if file_extention == ".epub":
+            txt_path = epub_to_text(file_list[n])
+            txtfile_list.append(txt_path)
+        elif file_extention == ".pdf":
+            txt_path = pdf_to_text(file_list[n])
+            txtfile_list.append(txt_path)
+        elif file_extention == ".docx":
+            txt_path = docx_to_text(file_list[n])
+            txtfile_list.append(txt_path)
+        elif file_extention == ".doc":
+            txt_path = doc_to_text(file_list[n])
+            txtfile_list.append(txt_path)
+        elif file_extention in (".html", ".htm"):
+            txt_path = html_to_text(file_list[n])
+            txtfile_list.append(txt_path)
+        elif file_extention == ".djvu":
+            txt_path = djvu_to_text(file_list[n])
+            txtfile_list.append(txt_path)
+    print("Finished converting files to .txt")
+
+    # get user tts input
+    choice = ""
+    cloning_path = ""
+    use_cloning = False
+    preset_speaker = ""
+    tts_initialized = False
+    tts = None
+
+    print("/// TTS options ///")
+    language = input("Language acronym (en for english): ")
+
+    while (len(choice) != 1) and choice != "c" and choice != "p":
+        choice = input("Use cloning voice (c) or preset voice? c/p: ")
+        choice.lower()
+        if choice == "c":
+            cloning_path = input("Input cloning voice .wav relative path: ")
+            #os.path.join(os.path.dirname(__file__), cloning_path)
+            use_cloning = True
+        elif choice == "p":
+            tts = make_tts_init(show_speakers=True)
+            preset_speaker = input("Input preset speaker name: ")
+            use_cloning = False
+        else:
+            print("!!! Please input 'c' or 'p' !!!")
+
+    # make all of the .wav files
+    print("Making all .wav files. This will take a long time...")
+    for i in txtfile_list:
+        with open(txtfile_list[i], "r") as file:
+            text_to_say = file.read()
+        make_tts_voiceover(
+            text_to_say,
+            use_cloning,
+            preset_speaker,
+            cloning_path,
+            language,
+            txtfile_list[i],
+            tts,
+            output_dir
+        )
+
 
 def get_user_input_docs():
     txt_path = ""
@@ -366,9 +468,9 @@ def make_tts_voiceover(
         print("Language: ", language)
         time.sleep(1)
         print("Text read: ", text_to_say)
-        goodbye()
 
 # /////////////////////////////////                 MAIN FUNCTION - ENTRY POINT                     //////////////////////////////
 if __name__ == "__main__":
     greet()
-    get_user_input_docs()
+    get_user_input_volume()
+    goodbye()
