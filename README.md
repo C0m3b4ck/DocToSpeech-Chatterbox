@@ -3,18 +3,13 @@ A Python script for making nice text-to-speech audio files out of common documen
 Uses coqui-tts for realistic-sounding text-to-speech models. **NVIDIA GPU recommended for better performance.** 
 ## Supported formats:
 ### In progress
-- .epub,
-- .pdf,
 - .djvu,
-- .html,
 - .htm,
 - .docx,
 ### Added
 - .epub,
 - .pdf,
-- .djvu,
 - .html, 
-- .htm,
 - .txt and all other raw text formats
 # To-do
 - Add chapters (one doc, multiple audio files) (preferably convert doc to .chp, which is a text file with chapter marks added)
