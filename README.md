@@ -89,18 +89,12 @@ pip install -r requirements-styletts2.txt
 python -m venv .venv-chatterbox
 source .venv-chatterbox/bin/activate
 
-# Install PyTorch first (pick CUDA version for your GPU):
-pip install torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu124
-
-# Install chatterbox without pulling deps (torch already installed):
+# Must be done in order — torch first, then chatterbox with --no-deps:
+pip install torch==2.6.0 torchaudio==2.6.0
 pip install chatterbox-tts --no-deps
-
-# Install remaining deps:
 pip install numpy librosa s3tokenizer transformers==5.2.0 diffusers==0.29.0
 pip install resemble-perth conformer==0.3.2 safetensors==0.5.3
 pip install spacy-pkuseg pykakasi==2.3.0 pyloudnorm omegaconf
-
-# Core tools:
 pip install epub2txt docx2txt pdftotext html2text pyfiglet tqdm rich ollama
 ```
 
