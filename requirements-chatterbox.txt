@@ -1,12 +1,29 @@
 # ========================= CHATTERBOX (separate venv) =========================
-# Why separate: pins torch==2.6.0, conflicts with coqui-tts torch version
+# Why separate: pins torch==2.6.0 + transformers==5.2.0, conflicts with coqui-tts
 #
 # Setup:
 #   python -m venv .venv-chatterbox
 #   source .venv-chatterbox/bin/activate
-#   pip install -r requirements-chatterbox.txt
 #
-# Then run doctospeech from this venv.
+#   Step 1: Install PyTorch from PyTorch index (pick one for your CUDA version):
+#     # CUDA 12.4 (most common)
+#     pip install torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu124
+#     # CUDA 12.6
+#     pip install torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu126
+#     # CUDA 11.8
+#     pip install torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu118
+#     # CPU only
+#     pip install torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+#
+#   Step 2: Install chatterbox with --no-deps (torch already installed):
+#     pip install chatterbox-tts --no-deps
+#
+#   Step 3: Install remaining dependencies:
+#     pip install numpy librosa s3tokenizer transformers==5.2.0 diffusers==0.29.0
+#     pip install resemble-perth conformer==0.3.2 safetensors==0.5.3
+#     pip install spacy-pkuseg pykakasi==2.3.0 pyloudnorm omegaconf
+#
+#   Then run doctospeech from this venv.
 
 epub2txt
 docx2txt
@@ -16,7 +33,3 @@ pyfiglet
 tqdm
 rich
 ollama
-
-torch==2.6.0
-torchaudio==2.6.0
-chatterbox-tts
