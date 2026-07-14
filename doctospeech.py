@@ -7,14 +7,6 @@ import time
 from datetime import datetime
 
 import pyfiglet
-import torch
-from TTS.api import TTS
-import ollama
-
-from epub2txt import epub2txt
-import pdftotext
-import docx2txt
-import html2text
 
 
 # ========================= TERMINAL COLORS =========================
@@ -175,6 +167,7 @@ def _chunk_text(text, max_chars=4000):
 
 def sanitize_with_ollama(txt_path, model="llama3.1", agent_prompt=None):
     """Send .txt file through Ollama for TTS readability cleanup."""
+    import ollama
     import threading
 
     system_prompt = load_agent_prompt(agent_prompt)
@@ -418,7 +411,10 @@ def get_user_input_dir():
     use_cloning = False
     preset_speaker = ""
 
-    if model_info["cloning"]:
+    if model_key == "chatterbox":
+        cloning_path = prompt("Path to .wav clone voice: ")
+        use_cloning = True
+    elif model_info["cloning"]:
         voice_choice = ""
         while voice_choice not in ("c", "p"):
             voice_choice = prompt("Voice type: cloning (c) or preset (p)? ").lower()
@@ -535,7 +531,10 @@ def get_user_input_tts(txt_path):
     use_cloning = False
     preset_speaker = ""
 
-    if model_info["cloning"]:
+    if model_key == "chatterbox":
+        cloning_path = prompt("Path to .wav clone voice: ")
+        use_cloning = True
+    elif model_info["cloning"]:
         voice_choice = ""
         while voice_choice not in ("c", "p"):
             voice_choice = prompt("Voice type: cloning (c) or preset (p)? ").lower()
@@ -579,6 +578,8 @@ def get_user_input_tts(txt_path):
 # ========================= DOC -> TXT =========================
 
 def epub_to_text(doc_path, chapter_choice=None):
+    from epub2txt import epub2txt
+
     if chapter_choice not in ("y", "n"):
         while True:
             chapter_choice = prompt("Split epub into separate chapters? (y/n): ").lower()
@@ -618,6 +619,7 @@ def epub_to_text(doc_path, chapter_choice=None):
 
 
 def pdf_to_text(doc_path):
+    import pdftotext
     choice = ""
     password = None
     pdf = None
@@ -664,6 +666,7 @@ def pdf_to_text(doc_path):
 
 
 def docx_to_text(doc_path):
+    import docx2txt
     txt_string = docx2txt.process(doc_path)
     txt_file = doc_path + ".txt"
 
@@ -684,6 +687,7 @@ def doc_to_text(doc_path):
 
 
 def html_to_text(doc_path):
+    import html2text
     try:
         with open(doc_path, 'r') as file:
             html_contents = file.read()
@@ -727,7 +731,7 @@ MODEL_REGISTRY = {
         "gpu": "Recommended (CPU possible, ~5-10x slower)",
         "cloning": True,
         "languages": "17 (en, es, fr, de, it, pt, pl, tr, ru, nl, cs, ar, zh, ja, hu, ko, bg)",
-        "package": "coqui-tts (already installed)",
+        "package": "coqui-tts",
         "init": "init_xtts",
     },
     "bark": {
@@ -737,7 +741,7 @@ MODEL_REGISTRY = {
         "gpu": "Recommended (CPU possible, very slow)",
         "cloning": False,
         "languages": "Multi-lingual (en, de, es, fr, it, ja, ko, pl, pt, ru, zh, hi, ar, tr)",
-        "package": "coqui-tts (already installed)",
+        "package": "coqui-tts",
         "init": "init_bark",
     },
     "vits": {
@@ -747,7 +751,7 @@ MODEL_REGISTRY = {
         "gpu": "Recommended (CPU works)",
         "cloning": False,
         "languages": "Varies by model (English default)",
-        "package": "coqui-tts (already installed)",
+        "package": "coqui-tts",
         "init": "init_vits",
     },
     "yourtts": {
@@ -757,7 +761,7 @@ MODEL_REGISTRY = {
         "gpu": "Recommended (CPU possible)",
         "cloning": True,
         "languages": "Multi-lingual (en, pt, fr, de, it, es, nl, pl, tr, ru, cs, ar, zh, ja, hu, ko)",
-        "package": "coqui-tts (already installed)",
+        "package": "coqui-tts",
         "init": "init_yourtts",
     },
     "chatterbox": {
@@ -815,7 +819,12 @@ MODEL_REGISTRY = {
 MODEL_KEYS = list(MODEL_REGISTRY.keys())
 
 
+FORCE_CPU = "--cpu" in sys.argv or os.environ.get("DOCTOSPEECH_CPU", "").lower() in ("1", "true", "yes")
+
 def _get_device():
+    import torch
+    if FORCE_CPU:
+        return "cpu"
     if torch.cuda.is_available():
         return "cuda"
     return "cpu"
@@ -858,7 +867,10 @@ def select_model():
     header(f"Initializing {model_info['name']}")
 
     device = _get_device()
-    info(f"Device: {C.BOLD}{device}{C.RESET}")
+    if FORCE_CPU:
+        info(f"Device: {C.BOLD}{device}{C.RESET} {C.DIM}(forced by --cpu){C.RESET}")
+    else:
+        info(f"Device: {C.BOLD}{device}{C.RESET}")
 
     init_fn = _get_init_fn(model_key)
     if init_fn is None:
@@ -1035,7 +1047,11 @@ def make_tts_voiceover(text_to_say, use_cloning, preset_voice, cloning_audio_pat
         preview = text_to_say[:200] + ("..." if len(text_to_say) > 200 else "")
         info(f"Preview: {C.DIM}{preview}{C.RESET}")
     except Exception as e:
-        error(f"TTS generation failed: {e}")
+        if "CUDA out of memory" in str(e):
+            error(f"CUDA out of memory: {e}")
+            info("Tip: run with {C.BOLD}--cpu{C.RESET} flag or set {C.BOLD}DOCTOSPEECH_CPU=1{C.RESET}")
+        else:
+            error(f"TTS generation failed: {e}")
         raise
 
 
@@ -1087,12 +1103,13 @@ def _gen_yourtts(tts, text, output_path, use_cloning, preset_voice, cloning_path
 def _gen_chatterbox(model, text, output_path, use_cloning, preset_voice, cloning_path, language):
     import torch
     import torchaudio as ta
-    if not use_cloning:
-        warn("Chatterbox requires a reference audio for voice, using default")
-        if not cloning_path:
-            raise ValueError("Chatterbox needs a reference .wav file (cloning_path)")
+    import os
+    if not cloning_path:
+        raise ValueError("Chatterbox needs a reference .wav file (cloning_path)")
+    if not os.path.isfile(cloning_path):
+        raise FileNotFoundError(f"Reference audio not found: {cloning_path}")
     wav = model.generate(text, audio_prompt_path=cloning_path)
-    model.save_audio(wav, output_path)
+    ta.save(output_path, wav.cpu(), model.sr)
 
 
 def _gen_tortoise(tts, text, output_path, use_cloning, preset_voice, cloning_path, language):
