@@ -1,0 +1,46 @@
+# ========================= CHATTERBOX (separate venv) =========================
+# Why separate: pins torch==2.6.0 + transformers==5.2.0, conflicts with coqui-tts
+#
+# IMPORTANT: Use Python 3.11 (or 3.10-3.13). Python 3.14 has no torch==2.6.0 wheels
+# and resemble-perth uses pkg_resources which was removed from setuptools in 3.14.
+#
+# Setup:
+#   python3.11 -m venv venv-chatterbox
+#   source venv-chatterbox/bin/activate
+#   pip install -r requirements-chatterbox.txt
+#
+#   Then run doctospeech from this venv.
+
+# --- Chatterbox deps ---
+chatterbox-tts==0.1.7
+torch==2.6.0
+torchaudio==2.6.0
+numpy==1.26.4
+librosa==0.11.0
+s3tokenizer==0.3.0
+transformers==5.2.0
+diffusers==0.29.0
+resemble-perth==1.0.1
+conformer==0.3.2
+safetensors==0.5.3
+spacy-pkuseg==1.0.1
+pykakasi==2.3.0
+pyloudnorm==0.2.0
+omegaconf==2.3.1
+scipy==1.17.1
+numba==0.66.0
+soundfile==0.14.0
+soxr==1.1.0
+
+# --- Core ---
+epub2txt==0.1.6
+docx2txt==0.9
+pdftotext==4.0.0
+html2text==2025.4.15
+pyfiglet==1.0.4
+tqdm==4.68.4
+rich==15.0.0
+ollama==0.6.2
+
+# --- Gradio Web UI ---
+gradio>=5.0.0

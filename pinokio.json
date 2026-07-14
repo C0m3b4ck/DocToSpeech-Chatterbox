@@ -1,0 +1,8 @@
+{
+  "title": "DocToSpeech (Chatterbox)",
+  "description": "Fully offline document-to-speech converter using Resemble Chatterbox TTS. 350M parameter model with paralinguistic tags and voice cloning. Converts EPUB, PDF, DOCX, HTML, and TXT files to audio. No API keys or cloud services required.",
+  "icon": "icon.png",
+  "author": "C0m3b4ck",
+  "license": "MPL-2.0",
+  "repository": "https://github.com/C0m3b4ck/DocToSpeech-Chatterbox"
+}
