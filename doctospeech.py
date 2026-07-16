@@ -201,7 +201,7 @@ def sanitize_with_ollama(txt_path, model="llama3.1", agent_prompt=None):
             },
         ]
 
-        response = ollama.chat(model=model, messages=messages)
+        response = ollama.chat(model=model, messages=messages, keep_alive=0)
         msg = response["message"]
         cleaned.append(msg.get("content", chunk))
 
@@ -222,19 +222,32 @@ def sanitize_with_ollama(txt_path, model="llama3.1", agent_prompt=None):
     info(f"{file_label}: {C.BOLD}{original_len}{C.RESET} -> {C.GREEN}{len(cleaned_text)}{C.RESET} chars ({C.YELLOW}-{saved}{C.RESET})")
     return txt_path
 
-    cleaned_text = "\n\n".join(cleaned)
 
-    # Write backup before overwriting
-    backup_path = txt_path + ".bak"
-    with open(backup_path, "w") as f:
-        f.write(raw)
+def sanitize_text(text, model="llama3.1", agent_prompt=None):
+    """Sanitize raw text through Ollama for TTS readability. Returns cleaned string."""
+    import ollama
 
-    with open(txt_path, "w") as f:
-        f.write(cleaned_text)
+    system_prompt = load_agent_prompt(agent_prompt)
+    chunks = _chunk_text(text)
+    cleaned = []
 
-    saved = original_len - len(cleaned_text)
-    info(f"{file_label}: {C.BOLD}{original_len}{C.RESET} -> {C.GREEN}{len(cleaned_text)}{C.RESET} chars ({C.YELLOW}-{saved}{C.RESET})")
-    return txt_path
+    for chunk in chunks:
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": (
+                    f"Below is a text chunk extracted from a document. "
+                    f"Sanitize it for TTS readability following your system instructions. "
+                    f"Output ONLY the sanitized text, nothing else.\n\n"
+                    f"---\n{chunk}\n---"
+                ),
+            },
+        ]
+        response = ollama.chat(model=model, messages=messages, keep_alive=0)
+        cleaned.append(response["message"].get("content", chunk))
+
+    return "\n\n".join(cleaned)
 
 
 def _ask_sanitize_options():
