@@ -41,13 +41,14 @@ Without Poppler, PDF documents will fail to load in the Gradio web UI and CLI.
 - Ollama-powered text sanitization for cleaner output
 - Customizable agent prompts for text cleanup
 - Pinokio 1-click launchers for each model
+- PDF OCR for scanned documents (via Tesseract)
 
 ## Supported Document Formats
 
 | Format | Status |
 |--------|--------|
 | EPUB | Supported (split by chapter or full text) |
-| PDF | Supported (with optional password) |
+| PDF | Supported (with optional password, OCR for scanned docs) |
 | DOCX | Supported |
 | HTML | Supported |
 | TXT | Supported (passthrough) |

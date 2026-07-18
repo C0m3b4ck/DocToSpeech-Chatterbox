@@ -20,7 +20,14 @@ tqdm==4.68.4
 rich==15.0.0
 ollama==0.6.2
 
+# ========================= PDF OCR (scanned documents) =========================
+pdf2image==1.17.0
+pytesseract==0.3.13
+
 torch==2.6.0
 torchaudio==2.6.0
 transformers==4.45.2
 soundfile==0.14.0
+
+# ========================= GRADIO WEB UI =========================
+gradio>=5.0.0
