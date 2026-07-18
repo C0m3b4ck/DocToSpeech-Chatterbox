@@ -16,13 +16,31 @@ Convert documents (EPUB, PDF, DOCX, HTML, TXT) to speech using local AI text-to-
 
 **Note:** CPU-only mode works but is 5-10x slower than GPU. Some models (Tortoise, Sesame CSM) require a GPU. Use Python 3.11 for all venvs — Python 3.14 is not supported by torch 2.6.0 (required by Chatterbox).
 
+### IMPORTANT COMPATIBILITY NOTE - READ BEFORE USE
+
+**Poppler** is required for PDF text extraction on all platforms. If you plan to process PDF files, you must install Poppler separately — it is **not** included with pip dependencies.
+
+| Platform | Install Command |
+|----------|-----------------|
+| **Linux (Debian/Ubuntu)** | `sudo apt install poppler-utils` |
+| **Linux (Fedora/RHEL)** | `sudo dnf install poppler-utils` |
+| **Linux (Arch)** | `sudo pacman -S poppler` |
+| **macOS** | `brew install poppler` |
+| **Windows** | Download from [poppler-windows releases](https://github.com/oschwartz10612/poppler-windows/releases), extract, and add the `Library/bin` folder to your system PATH |
+
+After installing, verify with: `pdftotext -v`
+
+Without Poppler, PDF documents will fail to load in the Gradio web UI and CLI.
+
 ## Features
 
 - Convert EPUB, PDF, DOCX, HTML, TXT to audio
 - Single file or batch directory processing
 - 9 TTS engines with voice cloning support
+- Gradio web UI for browser-based access
 - Ollama-powered text sanitization for cleaner output
 - Customizable agent prompts for text cleanup
+- Pinokio 1-click launchers for each model
 
 ## Supported Document Formats
 
@@ -131,6 +149,8 @@ python -m unidic download
 
 ## Usage
 
+### CLI
+
 ```bash
 python doctospeech.py
 ```
@@ -141,6 +161,39 @@ python doctospeech.py
 4. Select TTS model
 5. Configure voice (cloning or preset)
 6. Audio files are generated as `.wav`
+
+### Gradio Web UI
+
+```bash
+python app.py
+```
+
+Opens a browser-based interface at `http://localhost:7860`:
+
+- Upload documents (PDF, EPUB, DOCX, HTML, TXT) or paste text
+- Select TTS model from dropdown (unavailable models are greyed out with install instructions)
+- Configure voice type (cloning or preset), language, output filename
+- Optional Ollama text sanitization
+- Generate and play/download audio directly in the browser
+
+The web UI automatically detects which models are installed and warns about models that need a separate venv.
+
+### Pinokio (1-Click Launch)
+
+Pinokio launchers are provided for each model group. Copy the desired launcher folder to your Pinokio `api/` directory:
+
+| Launcher | Models | Venv |
+|----------|--------|------|
+| `pinokio/` | XTTS v2, Bark, VITS, YourTTS, StyleTTS 2 | Shared coqui venv |
+| `pinokio-chatterbox/` | Chatterbox | Separate |
+| `pinokio-tortoise/` | Tortoise TTS | Separate |
+| `pinokio-openvoice/` | OpenVoice V2 | Separate |
+| `pinokio-csm/` | Sesame CSM-1B | Separate |
+
+```bash
+# Example: install the Coqui launcher
+cp -r pinokio ~/.pinokio/api/DocToSpeech
+```
 
 ## Optional: Ollama Text Sanitization
 
@@ -155,15 +208,22 @@ Before TTS, you can clean extracted text using a local Ollama model:
 
 ```
 DocToSpeech/
-  doctospeech.py          # Main script
-  agent.md                # Ollama sanitization prompt (editable)
-  template.py             # Standalone Ollama sanitizer
-  requirements-coqui.txt  # Base install (4 coqui models)
+  doctospeech.py              # Main CLI script
+  app.py                      # Gradio web UI
+  agent.md                    # Ollama sanitization prompt (editable)
+  template.py                 # Standalone Ollama sanitizer
+  requirements-coqui.txt      # Base install (4 coqui models + gradio)
   requirements-styletts2.txt  # Add-on for same venv
   requirements-chatterbox.txt # Separate venv
   requirements-tortoise.txt   # Separate venv
   requirements-csm.txt        # Separate venv
   requirements-openvoice.txt  # Separate venv
+  requirements-gradio.txt     # Gradio-only install
+  pinokio/                    # Pinokio launcher (Coqui + StyleTTS2)
+  pinokio-chatterbox/         # Pinokio launcher (Chatterbox)
+  pinokio-tortoise/           # Pinokio launcher (Tortoise)
+  pinokio-openvoice/          # Pinokio launcher (OpenVoice)
+  pinokio-csm/                # Pinokio launcher (CSM)
 ```
 ## Known bugs
 * "Failed to load Resemble Chatterbox: 'NoneType' object is not callable" error when TTS generation is initiated for Chatterbox
