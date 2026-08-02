@@ -3,6 +3,8 @@ import sys
 import pathlib
 import tempfile
 import time
+import atexit
+import shutil
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -13,12 +15,12 @@ from doctospeech import (
     MODEL_KEYS,
     _get_device,
     _get_init_fn,
-    _get_speakers,
     make_tts_voiceover,
     _chunk_text,
     load_agent_prompt,
     AGENT_MD_PATH,
     sanitize_text,
+    validate_output_filename,
 )
 
 # ========================= MODEL AVAILABILITY =========================
@@ -116,6 +118,34 @@ def _model_has_preset(key):
     return _voice_mode(key) in ("both", "preset_only")
 
 
+# ========================= PRESET SPEAKERS =========================
+#
+# Populated without loading the multi-GB TTS model. XTTS v2, VITS and Bark
+# ship with fixed, well-known speaker lists.
+
+KNOWN_PRESET_SPEAKERS = {
+    "xtts_v2": [
+        "Claribel Dervla",
+        "Daisy Studious",
+        "Gracie Wise",
+        "Tammie Ema",
+        "Alison Dietlinde",
+        "Ana Florence",
+        "Annmarie Nele",
+        "Baldur Sanjin",
+        "Brenda Stern",
+        "Gitta Nikolina",
+        "Henriette Usha",
+        "Jozef Hay",
+        "Karim Mahmoud",
+        "Kumar Dahl",
+        "Marcellus Bluhm",
+    ],
+    "bark": [f"v2/en_speaker_{i}" for i in range(32)],
+    "vits": ["LJSpeech"],
+}
+
+
 # ========================= NON-INTERACTIVE TEXT EXTRACTION =========================
 
 def extract_text_from_file(file_path):
@@ -164,7 +194,7 @@ def _extract_pdf(path):
 
 def _extract_pdf_ocr(path):
     try:
-        from pdf2image import convert_from_path
+        from pdf2image import convert_from_path, pdfinfo_from_path
         import pytesseract
     except ImportError as e:
         raise ImportError(
@@ -173,11 +203,15 @@ def _extract_pdf_ocr(path):
             "Also requires Tesseract binary: sudo apt install tesseract-ocr"
         )
 
-    images = convert_from_path(path)
+    num_pages = int(pdfinfo_from_path(path).get("Pages", 1))
     pages = []
-    for img in images:
-        pages.append(pytesseract.image_to_string(img))
-    del images
+    chunk_size = 4
+    for start_page in range(1, num_pages + 1, chunk_size):
+        end_page = min(start_page + chunk_size - 1, num_pages)
+        images = convert_from_path(path, dpi=150, first_page=start_page, last_page=end_page)
+        for img in images:
+            pages.append(pytesseract.image_to_string(img))
+        del images
     return "\n\n".join(pages)
 
 
@@ -197,8 +231,19 @@ def _extract_html(path):
 
 # ========================= MODEL LOADING =========================
 
+_MODEL_CACHE = {}
+
+# Reused per session (never cleaned up per-generation like the old mkdtemp), so
+# gradio can serve the returned files and the dir is removed on process exit.
+_SESSION_TMP = tempfile.mkdtemp(prefix="doctospeech_")
+atexit.register(shutil.rmtree, _SESSION_TMP, ignore_errors=True)
+
+
 def load_model(model_key):
+    """Load (or return the cached) TTS model for a key."""
     info = MODEL_REGISTRY[model_key]
+    if model_key in _MODEL_CACHE:
+        return _MODEL_CACHE[model_key], 0.0
     device = _get_device()
     init_fn = _get_init_fn(model_key)
     if init_fn is None:
@@ -206,6 +251,7 @@ def load_model(model_key):
     start = time.time()
     tts_obj = init_fn(model_key, device)
     elapsed = time.time() - start
+    _MODEL_CACHE[model_key] = tts_obj
     return tts_obj, elapsed
 
 
@@ -293,12 +339,7 @@ def on_model_change(model_choice):
     voice_ref = gr.update(visible=show_clone)
 
     # --- Preset dropdown (visible only when preset available) ---
-    speakers = []
-    if mode in ("preset_only", "both"):
-        try:
-            speakers = _get_speakers(key, None)
-        except Exception:
-            pass
+    speakers = KNOWN_PRESET_SPEAKERS.get(key, [])
 
     show_preset = mode in ("preset_only", "both")
     preset_dd = gr.update(
@@ -410,12 +451,13 @@ def on_generate(
             cloning_path = ""
             preset = preset_speaker or "default"
 
-    out_name = (output_name or "output").strip()
+    out_name = validate_output_filename(output_name or "output")
+    if out_name is None:
+        raise gr.Error("Output filename must not contain path separators or '..'")
     if not out_name.endswith(".wav"):
         out_name += ".wav"
 
-    tmp_dir = tempfile.mkdtemp(prefix="doctospeech_")
-    output_path = os.path.join(tmp_dir, out_name)
+    output_path = os.path.join(_SESSION_TMP, out_name)
 
     try:
         tts_obj, load_time = load_model(key)
@@ -433,7 +475,8 @@ def on_generate(
     if not os.path.isfile(output_path):
         raise gr.Error("Generation completed but output file not found.")
 
-    return output_path, f"Generated in {load_time:.1f}s (model load) + synthesis"
+    load_note = f"{load_time:.1f}s (cached load)" if load_time == 0 else f"{load_time:.1f}s (model load)"
+    return output_path, f"Generated in {load_note} + synthesis"
 
 
 # ========================= BUILD UI =========================
@@ -625,4 +668,4 @@ with gr.Blocks(title="DocToSpeech") as demo:
 
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860, theme=gr.themes.Soft())
+    demo.launch(server_name="127.0.0.1", server_port=7860, theme=gr.themes.Soft())

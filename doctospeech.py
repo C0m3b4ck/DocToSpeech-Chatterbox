@@ -1,6 +1,7 @@
 import os
 import pathlib
 import sys
+import tempfile
 
 from tqdm import tqdm
 import time
@@ -77,6 +78,16 @@ def validate_path_exists(path, label="path"):
         error(f"{label} does not exist: {path}")
         return None
     return os.path.realpath(path)
+
+def validate_output_filename(name):
+    """Validate a user-entered output filename. Returns a cleaned basename or None if unsafe."""
+    name = (name or "").strip()
+    if not name or name in (".", ".."):
+        return None
+    if os.path.isabs(name) or "/" in name or "\\" in name or ".." in name:
+        warn(f"Rejected unsafe output filename: {name}")
+        return None
+    return name
 
 
 # ========================= AGENT PROMPT =========================
@@ -187,40 +198,38 @@ def sanitize_with_ollama(txt_path, model="llama3.1", agent_prompt=None):
     spinner = threading.Thread(target=_spinner, args=(f"Sanitizing {file_label} ({len(chunks)} chunk(s))", elapsed, stop_event), daemon=True)
     spinner.start()
 
-    for i, chunk in enumerate(chunks):
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": (
-                    f"Below is a text chunk extracted from a document. "
-                    f"Sanitize it for TTS readability following your system instructions. "
-                    f"Output ONLY the sanitized text, nothing else.\n\n"
-                    f"---\n{chunk}\n---"
-                ),
-            },
-        ]
+    try:
+        for i, chunk in enumerate(chunks):
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": (
+                        f"Below is a text chunk extracted from a document. "
+                        f"Sanitize it for TTS readability following your system instructions. "
+                        f"Output ONLY the sanitized text, nothing else.\n\n"
+                        f"---\n{chunk}\n---"
+                    ),
+                },
+            ]
 
-        response = ollama.chat(model=model, messages=messages, keep_alive=0)
-        msg = response["message"]
-        cleaned.append(msg.get("content", chunk))
-
-    stop_event.set()
-    spinner.join()
+            response = ollama.chat(model=model, messages=messages, keep_alive=0)
+            msg = response["message"]
+            cleaned.append(msg.get("content", chunk))
+    finally:
+        stop_event.set()
+        spinner.join()
 
     cleaned_text = "\n\n".join(cleaned)
 
-    # Write backup before overwriting
-    backup_path = txt_path + ".bak"
-    with open(backup_path, "w") as f:
-        f.write(raw)
-
-    with open(txt_path, "w") as f:
+    # Write sanitized copy (never overwrite the source/extracted artifact)
+    sanitized_path = _sanitized_txt_path(txt_path)
+    with open(sanitized_path, "w") as f:
         f.write(cleaned_text)
 
     saved = original_len - len(cleaned_text)
     info(f"{file_label}: {C.BOLD}{original_len}{C.RESET} -> {C.GREEN}{len(cleaned_text)}{C.RESET} chars ({C.YELLOW}-{saved}{C.RESET})")
-    return txt_path
+    return sanitized_path
 
 
 def sanitize_text(text, model="llama3.1", agent_prompt=None):
@@ -381,6 +390,9 @@ def get_user_input_dir():
             elif file_ext == ".docx":
                 txt_path = docx_to_text(full_path)
                 txtfile_list.append(txt_path)
+            elif file_ext == ".txt":
+                info(f"Already plain text: {filename}")
+                txtfile_list.append(full_path)
             elif file_ext == ".doc":
                 warn(f".doc not implemented yet: {filename}")
             elif file_ext in (".html", ".htm"):
@@ -405,11 +417,14 @@ def get_user_input_dir():
         info(f"Model: {C.BOLD}{model}{C.RESET}")
         if agent_path:
             info(f"Custom agent: {C.BOLD}{agent_path}{C.RESET}")
+        sanitized_list = []
         for txt_path in txtfile_list:
             try:
-                sanitize_with_ollama(txt_path, model=model, agent_prompt=agent_path)
+                sanitized_list.append(sanitize_with_ollama(txt_path, model=model, agent_prompt=agent_path))
             except Exception as e:
                 error(f"Failed to sanitize {os.path.basename(txt_path)}: {e}")
+                sanitized_list.append(txt_path)
+        txtfile_list = sanitized_list
         success("Sanitization complete")
 
     header("TTS Options")
@@ -516,7 +531,11 @@ def get_user_input_docs():
 def get_user_input_tts(txt_path):
     header("TTS Configuration")
 
-    output_file_name = prompt("Output filename (without .wav): ").strip()
+    while True:
+        output_file_name = validate_output_filename(prompt("Output filename (without .wav): "))
+        if output_file_name is not None:
+            break
+        warn("Output filename must not contain path separators or '..'")
 
     choice_timestamp = ""
     while choice_timestamp not in ("y", "n"):
@@ -575,8 +594,8 @@ def get_user_input_tts(txt_path):
     do_sanitize, sanitize_model, agent_path = _ask_sanitize_options()
     if do_sanitize:
         try:
-            sanitize_with_ollama(txt_path, model=sanitize_model, agent_prompt=agent_path)
-            with open(txt_path, "r") as file:
+            sanitized_path = sanitize_with_ollama(txt_path, model=sanitize_model, agent_prompt=agent_path)
+            with open(sanitized_path, "r") as file:
                 file_contents = file.read()
             info("Sanitized preview:")
             preview = file_contents[:200] + ("..." if len(file_contents) > 200 else "")
@@ -586,6 +605,28 @@ def get_user_input_tts(txt_path):
             warn("Proceeding with unsanitized text")
 
     make_tts_voiceover(file_contents, use_cloning, preset_speaker, cloning_path, language, tts_obj, output_path, model_key=model_key)
+
+
+# ========================= EXTRACTED TEXT OUTPUT =========================
+
+_EXTRACT_DIR = None
+
+def _get_extract_dir():
+    """Return a per-process temp dir for extracted .txt files (never the source dir)."""
+    global _EXTRACT_DIR
+    if _EXTRACT_DIR is None:
+        _EXTRACT_DIR = tempfile.mkdtemp(prefix="doctospeech_extract_")
+    return _EXTRACT_DIR
+
+def _extract_txt_path(doc_path, stem_suffix=""):
+    """Build the output path for an extracted .txt file inside the temp extract dir."""
+    name = pathlib.Path(doc_path).name
+    return os.path.join(_get_extract_dir(), f"{name}{stem_suffix}.txt")
+
+def _sanitized_txt_path(txt_path):
+    """Return the output path for a sanitized copy of an extracted .txt file."""
+    name = pathlib.Path(txt_path).name.rsplit(".", 1)[0]
+    return os.path.join(_get_extract_dir(), f"{name}_sanitized.txt")
 
 
 # ========================= DOC -> TXT =========================
@@ -607,12 +648,11 @@ def epub_to_text(doc_path, chapter_choice=None):
 
     info(f"Read {C.BOLD}{len(chapter_list)}{C.RESET}{C.DIM} chapter(s){C.RESET}")
 
-    base_name = doc_path.rsplit('.', 1)[0]
     txt_files = []
 
     if chapter_choice == "y":
         for i, chapter in enumerate(chapter_list):
-            chapter_file = f"{base_name}_chapter_{i + 1}.txt"
+            chapter_file = _extract_txt_path(doc_path, f"_chapter_{i + 1}")
             with open(chapter_file, "w") as f:
                 f.write(chapter)
             txt_files.append(chapter_file)
@@ -621,7 +661,7 @@ def epub_to_text(doc_path, chapter_choice=None):
     else:
         full_txt = "\n\n".join(chapter_list)
         del chapter_list
-        txt_file = doc_path + ".txt"
+        txt_file = _extract_txt_path(doc_path)
         with open(txt_file, "w") as f:
             f.write(full_txt)
         del full_txt
@@ -666,7 +706,7 @@ def pdf_to_text_ocr(doc_path, password=None):
 
     del images
 
-    txt_file = doc_path + ".txt"
+    txt_file = _extract_txt_path(doc_path)
     try:
         with open(txt_file, "w") as save_text:
             for i, page in enumerate(pages):
@@ -700,8 +740,6 @@ def pdf_to_text(doc_path):
     except Exception as e:
         error(f"Failed to open PDF: {e}")
         raise
-    finally:
-        password = None
 
     info(f"PDF has {C.BOLD}{len(pdf)}{C.RESET}{C.DIM} page(s){C.RESET}")
 
@@ -717,7 +755,7 @@ def pdf_to_text(doc_path):
         for page in pdf:
             print(page)
 
-    txt_file = doc_path + ".txt"
+    txt_file = _extract_txt_path(doc_path)
     try:
         with open(txt_file, "w") as save_text:
             for i, page in enumerate(pdf):
@@ -736,7 +774,7 @@ def pdf_to_text(doc_path):
 def docx_to_text(doc_path):
     import docx2txt
     txt_string = docx2txt.process(doc_path)
-    txt_file = doc_path + ".txt"
+    txt_file = _extract_txt_path(doc_path)
 
     try:
         with open(txt_file, "w") as save_text:
@@ -772,7 +810,7 @@ def html_to_text(doc_path):
         error(f"Failed to convert HTML: {e}")
         raise
 
-    txt_file = doc_path + ".txt"
+    txt_file = _extract_txt_path(doc_path)
     try:
         with open(txt_file, "w") as save_text:
             save_text.write(txt_string)
