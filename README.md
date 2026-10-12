@@ -79,4 +79,4 @@ Started on July 12th, 2026 by [C0m3b4ck](https://github.com/C0m3b4ck).
 - [tqdm](https://github.com/tqdm/tqdm) -- Progress bars
 - [Ollama](https://ollama.com) -- Local LLM for text sanitization
 
-MPL 2.0 License.
+APL 2.0 License.
